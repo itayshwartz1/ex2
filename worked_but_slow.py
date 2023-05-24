@@ -2,13 +2,18 @@ import random
 import string
 import re
 import time
+
 NUM_BEST_TO_DUPLICATE = 0.2
 MUTATE_RATE = 0.2
+BIG_MUTATE_RATE = 0.7
 LETTER_TO_CHANGE = 2 / 26
+BIG_LETTER_TO_CHANGE = 8 / 26
 MAX_GENERATION = 1000
 POPULATION_SIZE = 500
 global LEN_ENC
 LEN_ENC = 0
+global FITNESS_COUNT
+FITNESS_COUNT = 0
 
 
 def load_dictionary(file_path):
@@ -62,6 +67,8 @@ def decrypt_text(text, mapping):
 
 
 def calculate_fitness(decrypted_text, dictionary, letter_frequencies, letter_pair_frequencies):
+    global FITNESS_COUNT
+    FITNESS_COUNT += 1
     words = re.findall(r'\b\w+\b', decrypted_text)
     ascii_dict = {ascii_value: 0 for ascii_value in string.ascii_lowercase}
 
@@ -130,12 +137,17 @@ def crossover(parent1, parent2):
     return child
 
 
-def mutate(mapping):
-    if random.random() >= MUTATE_RATE:
+def mutate(mapping, big_muted):
+    mute_rate = MUTATE_RATE
+    letter_rate = LETTER_TO_CHANGE
+    if big_muted:
+        mute_rate = BIG_MUTATE_RATE
+        letter_rate = BIG_LETTER_TO_CHANGE
+    if random.random() >= mute_rate:
         return mapping
     letters = list(string.ascii_lowercase)
     for letter in mapping:
-        if random.random() < LETTER_TO_CHANGE:
+        if random.random() < letter_rate:
             letter_to_swap = random.randint(0, 25)
             while letters[letter_to_swap] == letter:
                 letter_to_swap = random.randint(0, 25)
@@ -159,26 +171,29 @@ def genetic_algorithm(ciphertext, dictionary, letter_frequencies, letter_pair_fr
             _, fitness = calculate_fitness(decrypted_text, dictionary, letter_frequencies, letter_pair_frequencies)
             fitness_scores.append(fitness)
 
+        avg_fitness = sum(fitness_scores) / POPULATION_SIZE
         best_fitness = max(fitness_scores)
         best_mapping = population[fitness_scores.index(best_fitness)]
         best_decrypt_text = decrypt_text(ciphertext, best_mapping)
         hit_rate, res = calculate_fitness(decrypt_text(ciphertext, best_mapping), dictionary, letter_frequencies, letter_pair_frequencies)
 
-        stack[generation % 10] = best_fitness
-        if all(best_fitness == value for value in stack):
+        stack[generation % 10] = hit_rate
+        big_muted = False
+        if sum(hit_rate == value for value in stack) == 7:
+            big_muted = True
+        if all(hit_rate == value for value in stack):
             if hit_rate / LEN_ENC < 0.7:
                 return False, best_decrypt_text, best_fitness, best_mapping
             else:
                 return True, best_decrypt_text, best_fitness, best_mapping
 
         print(str(hit_rate / LEN_ENC) + ", gen number is:" + str(generation))
-        # if hit_rate / LEN_ENC == 1.0:
-        #     return True, decrypt_text(ciphertext, best_mapping)
-        new_population = [mutate(best_mapping)] * round(POPULATION_SIZE * NUM_BEST_TO_DUPLICATE)
+
+        new_population = [mutate(best_mapping, big_muted)] * round(POPULATION_SIZE * NUM_BEST_TO_DUPLICATE)
 
         while len(new_population) < POPULATION_SIZE:
             parent1, parent2 = select_parents(population, fitness_scores)
-            new_population.append(mutate(crossover(parent1, parent2)))
+            new_population.append(mutate(crossover(parent1, parent2), big_muted))
 
         population = new_population
 
@@ -202,15 +217,17 @@ def main():
     start_time = time.time()
     best_fitness = 0
     best_mapping = {}
-    best_decrypted_text = ""
+    best_decrypted_text = ''
     for i in range(10):
         solved, decrypted_text, fitness, mapping = genetic_algorithm(ciphertext, dictionary, letter_frequencies, letter_pair_frequencies)
-        if solved:
-            break
         if fitness > best_fitness:
             best_fitness = fitness
             best_mapping = mapping
             best_decrypted_text = decrypted_text
+
+        if solved:
+            break
+
 
     end_time = time.time()
     execution_time = end_time - start_time
@@ -222,7 +239,7 @@ def main():
     with open("perm.txt", 'w') as file:
         for key, value in best_mapping.items():
             file.write(f"{key} {value}\n")
-
+    print("The number of times the fitness function was called is: " + str(FITNESS_COUNT))
 
 if __name__ == '__main__':
     main()
