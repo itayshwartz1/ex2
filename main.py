@@ -5,11 +5,11 @@ Noa Eitan 316222777
 
 import re, random, string, copy
 
-NUM_OF_SOLUTIONS = 100
-MAX_GENERATION = 10000
-PERCENT_TO_DUPLICATE = 0.05
+NUM_OF_SOLUTIONS = 50
+MAX_GENERATION = 1000
+PERCENT_TO_DUPLICATE = 0.2
 NUM_OF_LETTERS = 26
-PERCENTE_TO_MUTATE = 0.2
+PERCENTE_TO_MUTATE = 0.5
 
 class Problem:
     def __init__(self):
@@ -110,6 +110,7 @@ def calculate_fitness_of_individuals(problem, population):
 
         # normalize the count of appearance of letters to percentage
         sum_of_letters = sum(ascii_dict.values())
+
         sum_letter_freq = 0
         for letter in ascii_dict:
             ascii_dict[letter] /= sum_of_letters
@@ -126,10 +127,12 @@ def calculate_fitness_of_individuals(problem, population):
 
     total_letter_freq = sum(letter_freq_array_dis)
     total_letter2_freq = sum(letter2_freq_array_dis)
+
     for i, solution in enumerate(population):
-        solution.fitness += (num_of_hits_array[i] / problem.num_of_words_in_enc) / 3
-        solution.fitness += (letter_freq_array_dis[i] / total_letter_freq) / 3
-        solution.fitness += (letter2_freq_array_dis[i] / total_letter2_freq) / 3
+        solution.fitness = 0
+        solution.fitness += (num_of_hits_array[i] / problem.num_of_words_in_enc) * 0.7
+        solution.fitness += (letter_freq_array_dis[i] / total_letter_freq) * 0.2
+        solution.fitness += (letter2_freq_array_dis[i] / total_letter2_freq) * 0.1
 
 
 def init_population(problem):
@@ -162,16 +165,17 @@ def crossover(problem, parent1, parent2):
     new_perm = parent1.perm.copy()
     letters_set = set(string.ascii_lowercase)
 
+    # remove mapping, tot the keys!!!
     for ascii_value in range(ord('a'), ord('a') + index):
-        letters_set.remove(chr(ascii_value))
+        letters_set.remove(parent1.perm[chr(ascii_value)])
 
     # put letters from parent2
-    for ascii_value in range(ord('a') + index, NUM_OF_LETTERS + 1):
-        if chr(ascii_value) not in letters_set:
+    for ascii_value in range(ord('a') + index, ord('z') + 1):
+        if parent2.perm[chr(ascii_value)] not in letters_set:
             new_perm[chr(ascii_value)] = ""
-            continue
-        new_perm[chr(ascii_value)] = parent2.perm[chr(ascii_value)]
-        letters_set.remove(chr(ascii_value))
+        else:
+            new_perm[chr(ascii_value)] = parent2.perm[chr(ascii_value)]
+            letters_set.remove(parent2.perm[chr(ascii_value)])
 
     # fix errors
     for key in new_perm.keys():
@@ -201,7 +205,7 @@ def next_gen(problem, population):
     new_population = []
 
     population.sort(key=get_fitness, reverse=True)
-
+    print("the best fitness is:" + str(population[0].fitness))
     num_of_best_sol = round(PERCENT_TO_DUPLICATE * NUM_OF_SOLUTIONS)
     new_population = population[:num_of_best_sol]
 
