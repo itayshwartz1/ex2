@@ -2,23 +2,19 @@ import random
 import string
 import re
 import time
-
-NUM_BEST_TO_DUPLICATE = 0.1
+NUM_BEST_TO_DUPLICATE = 0.2
 MUTATE_RATE = 0.2
 LETTER_TO_CHANGE = 2 / 26
 MAX_GENERATION = 1000
 POPULATION_SIZE = 500
 global LEN_ENC
 LEN_ENC = 0
-global LEN_DICT
-LEN_DICT = 0
+
 
 def load_dictionary(file_path):
-    global LEN_DICT
     with open(file_path, 'r') as file:
-        dict = set(line.strip().lower() for line in file)
-        LEN_DICT = len(dict)
-        return dict
+        return set(line.strip().lower() for line in file)
+
 
 def load_letter_frequencies(file_path):
     frequencies = {}
@@ -91,26 +87,20 @@ def calculate_fitness(decrypted_text, dictionary, letter_frequencies, letter_pai
     sum_letter_freq = 0
     for letter in ascii_dict:
         val = ascii_dict[letter] / sum_of_letters
-        sum_letter_freq += abs(letter_frequencies[letter] - val)
+        sum_letter_freq += abs(letter_frequencies[letter] - val) ** 2
 
     sum_of_pairs = sum(pair_dict.values())
     sum_pair_freq = 0
     for pair in pair_dict:
         val = pair_dict[pair] / sum_of_pairs
-        sum_pair_freq += abs(letter_pair_frequencies[pair] - val)
+        sum_pair_freq += abs(letter_pair_frequencies[pair] - val) ** 2
 
-    #return num_of_hits, num_of_hits - sum_letter_freq * 5 - sum_pair_freq * 5 + 100
-    return num_of_hits, sum_letter_freq / 26 + sum_pair_freq / 676 + (LEN_DICT - num_of_hits) / LEN_DICT
+    #return num_of_hits, (num_of_hits) * 0.8 + (1 / (1 + sum_letter_freq)) * 0.1 + (1 / (1 + sum_pair_freq)) * 0.1
+    return num_of_hits, num_of_hits - sum_letter_freq * 10 - sum_pair_freq * 10 + 100
 
 
 def select_parents(population, fitness_scores):
-    inverted_fitnesses = [1 / fitness for fitness in fitness_scores]
-    total_inverted_fitness = sum(inverted_fitnesses)
-    probabilities = [inverted_fitness / total_inverted_fitness for inverted_fitness in inverted_fitnesses]
-
-    # Perform roulette wheel selection
-    selected_parents = random.choices(population, probabilities, k=2)
-    return selected_parents
+    return random.choices(population, fitness_scores, k=2)
 
 
 def crossover(parent1, parent2):
@@ -141,17 +131,6 @@ def crossover(parent1, parent2):
 
 
 def mutate(mapping):
-    letters = list(string.ascii_lowercase)
-    index1 = random.randint(0, 25)
-    index2 = random.randint(0, 25)
-    while index1 == index2:
-        index2 = random.randint(0, 25)
-
-    tmp = mapping[letters[index1]]
-    mapping[letters[index1]] = mapping[letters[index2]]
-    mapping[letters[index2]] = tmp
-    return mapping
-
     if random.random() >= MUTATE_RATE:
         return mapping
     letters = list(string.ascii_lowercase)
@@ -169,29 +148,22 @@ def mutate(mapping):
 def genetic_algorithm(ciphertext, dictionary, letter_frequencies, letter_pair_frequencies):
     global LEN_ENC
     LEN_ENC = len(ciphertext.lower().split())
-
+    stack = [0] * 10
     population = [generate_random_mapping() for _ in range(POPULATION_SIZE)]
     best_mapping = None
-    stack = [0] * 10
-
     for generation in range(MAX_GENERATION):
-        fitness_scores = []
 
+        fitness_scores = []
         for mapping in population:
             decrypted_text = decrypt_text(ciphertext, mapping)
             _, fitness = calculate_fitness(decrypted_text, dictionary, letter_frequencies, letter_pair_frequencies)
             fitness_scores.append(fitness)
 
-        best_fitness = min(fitness_scores)
+        best_fitness = max(fitness_scores)
         best_mapping = population[fitness_scores.index(best_fitness)]
         best_decrypt_text = decrypt_text(ciphertext, best_mapping)
-        hit_rate, _ = calculate_fitness(best_decrypt_text, dictionary, letter_frequencies, letter_pair_frequencies)
-        print(str(hit_rate / LEN_ENC) + ", gen number is:" + str(generation))
+        hit_rate, res = calculate_fitness(decrypt_text(ciphertext, best_mapping), dictionary, letter_frequencies, letter_pair_frequencies)
 
-        if hit_rate / LEN_ENC == 1.0:
-            return True, best_decrypt_text, best_fitness, best_mapping
-
-        # stopping condition
         stack[generation % 10] = best_fitness
         if all(best_fitness == value for value in stack):
             if hit_rate / LEN_ENC < 0.7:
@@ -199,19 +171,14 @@ def genetic_algorithm(ciphertext, dictionary, letter_frequencies, letter_pair_fr
             else:
                 return True, best_decrypt_text, best_fitness, best_mapping
 
-        combined_data = zip(population, fitness_scores)
-        sorted_data = sorted(combined_data, key=lambda x: x[1])
-        num_best = max(1, round(POPULATION_SIZE * 0.1))  # Select at least 1 permutation
-        new_population = [data[0] for data in sorted_data[:num_best]]
+        print(str(hit_rate / LEN_ENC) + ", gen number is:" + str(generation))
+        # if hit_rate / LEN_ENC == 1.0:
+        #     return True, decrypt_text(ciphertext, best_mapping)
+        new_population = [mutate(best_mapping)] * round(POPULATION_SIZE * NUM_BEST_TO_DUPLICATE)
 
         while len(new_population) < POPULATION_SIZE:
             parent1, parent2 = select_parents(population, fitness_scores)
-            new_population.append(crossover(parent1, parent2))
-
-
-        chosen = random.sample(new_population, k=round(POPULATION_SIZE * MUTATE_RATE))
-        for child in chosen:
-            new_population[new_population.index(child)] = mutate(child)
+            new_population.append(mutate(crossover(parent1, parent2)))
 
         population = new_population
 
