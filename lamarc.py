@@ -1,7 +1,13 @@
+'''
+Itay Shwartz 318528171
+Noa Eitan 316222777
+'''
 import random
 import string
 import re
 import time
+import csv
+import matplotlib.pyplot as plt
 
 NUM_BEST_TO_DUPLICATE = 0.2
 MUTATE_RATE = 0.2
@@ -9,11 +15,22 @@ BIG_MUTATE_RATE = 0.7
 LETTER_TO_CHANGE = 2 / 26
 BIG_LETTER_TO_CHANGE = 8 / 26
 MAX_GENERATION = 1000
-POPULATION_SIZE = 300
+POPULATION_SIZE = 500
+N = 2
+
 global LEN_ENC
 LEN_ENC = 0
 global FITNESS_COUNT
 FITNESS_COUNT = 0
+
+global AVG
+AVG = []
+
+global BEST
+BEST = []
+
+global WORST
+WORST = []
 
 
 def load_dictionary(file_path):
@@ -102,7 +119,6 @@ def calculate_fitness(decrypted_text, dictionary, letter_frequencies, letter_pai
         val = pair_dict[pair] / sum_of_pairs
         sum_pair_freq += abs(letter_pair_frequencies[pair] - val) ** 2
 
-    #return num_of_hits, (num_of_hits) * 0.8 + (1 / (1 + sum_letter_freq)) * 0.1 + (1 / (1 + sum_pair_freq)) * 0.1
     return num_of_hits, num_of_hits - sum_letter_freq * 10 - sum_pair_freq * 10 + 100
 
 
@@ -156,6 +172,25 @@ def mutate(mapping, big_muted):
             mapping[letters[letter_to_swap]] = tmp
     return mapping
 
+def local_optimization(mapping, origin_fitness, ciphertext, dictionary, letter_frequencies, letter_pair_frequencies):
+    origin_mapping = mapping.deepcopy()
+    letters = string.ascii_lowercase
+    for _ in range(N):
+        i = random.randint(0, 25)
+        j = random.randint(0, 25)
+        while i == j:
+            j = random.randint(0, 25)
+        tmp = mapping[letters[i]]
+        mapping[letters[i]] = mapping[letters[j]]
+        mapping[letters[j]] = tmp
+
+    new_decrypted_text = decrypt_text(ciphertext, mapping)
+    _, new_fitness = calculate_fitness(new_decrypted_text, dictionary, letter_frequencies, letter_pair_frequencies)
+
+    if origin_fitness < new_fitness:
+        return mapping, new_fitness
+    return origin_mapping, origin_fitness
+
 
 def genetic_algorithm(ciphertext, dictionary, letter_frequencies, letter_pair_frequencies):
     global LEN_ENC
@@ -166,16 +201,24 @@ def genetic_algorithm(ciphertext, dictionary, letter_frequencies, letter_pair_fr
     for generation in range(MAX_GENERATION):
 
         fitness_scores = []
-        for mapping in population:
+        for index, mapping in enumerate(population):
             decrypted_text = decrypt_text(ciphertext, mapping)
             _, fitness = calculate_fitness(decrypted_text, dictionary, letter_frequencies, letter_pair_frequencies)
-            fitness_scores.append(fitness)
+            new_mapping, new_fitness = local_optimization(mapping, fitness, ciphertext, dictionary, letter_frequencies,
+                                                          letter_pair_frequencies)
+            population[index] = new_mapping
+            fitness_scores.append(new_fitness)
 
         avg_fitness = sum(fitness_scores) / POPULATION_SIZE
         best_fitness = max(fitness_scores)
         best_mapping = population[fitness_scores.index(best_fitness)]
         best_decrypt_text = decrypt_text(ciphertext, best_mapping)
         hit_rate, res = calculate_fitness(decrypt_text(ciphertext, best_mapping), dictionary, letter_frequencies, letter_pair_frequencies)
+
+        BEST.append(best_fitness)
+        AVG.append(avg_fitness)
+        WORST.append(min(fitness_scores))
+
 
         stack[generation % 10] = hit_rate
         big_muted = False
@@ -240,5 +283,32 @@ def main():
             file.write(f"{key} {value}\n")
     print("The number of times the fitness function was called is: " + str(FITNESS_COUNT))
 
+
 if __name__ == '__main__':
-    main()
+    for i in range(10):
+        print("**************************************" + str(i) + "*********************************************")
+        main()
+        # Saving data to CSV
+        data = zip(BEST, AVG, WORST)
+        csv_filename = 'scores.csv'
+
+        with open(csv_filename, 'w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(['BEST', 'AVG', 'WORST'])
+            writer.writerows(data)
+
+        print(f"The scores have been saved to {csv_filename}.")
+
+        # Creating the graph
+        x = range(1, len(BEST) + 1)
+
+        plt.plot(x, BEST, label='BEST')
+        plt.plot(x, AVG, label='AVG')
+        plt.plot(x, WORST, label='WORST')
+
+        plt.xlabel('Data Point')
+        plt.ylabel('Scores')
+        plt.title('Scores Comparison')
+        plt.legend()
+
+        plt.show()

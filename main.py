@@ -2,243 +2,292 @@
 Itay Shwartz 318528171
 Noa Eitan 316222777
 '''
+import random
+import string
+import re
+import time
+import csv
+import matplotlib.pyplot as plt
 
-import re, random, string, copy
-
-NUM_OF_SOLUTIONS = 50
+NUM_BEST_TO_DUPLICATE = 0.2
+MUTATE_RATE = 0.2
+BIG_MUTATE_RATE = 0.7
+LETTER_TO_CHANGE = 2 / 26
+BIG_LETTER_TO_CHANGE = 8 / 26
 MAX_GENERATION = 1000
-PERCENT_TO_DUPLICATE = 0.2
-NUM_OF_LETTERS = 26
-PERCENTE_TO_MUTATE = 0.5
+POPULATION_SIZE = 500
+global LEN_ENC
+LEN_ENC = 0
+global FITNESS_COUNT
+FITNESS_COUNT = 0
 
-class Problem:
-    def __init__(self):
-        self.letter_freq = {}
-        self.letter2_freq = {}
-        self.dict_words = []
+global AVG
+AVG = []
 
-        with open('enc.txt', 'r') as file:
-            content = file.read()
-            self.words = re.findall(r'\b\w+\b', content)
+global BEST
+BEST = []
 
-        self.num_of_words_in_enc = len(self.words)
-
-        with open('Letter_Freq.txt', 'r') as file:
-            for line in file:
-                line = line.strip()
-                if line:
-                    number, letter = line.split()
-                    self.letter_freq[letter.lower()] = float(number)
-
-        with open('Letter2_Freq.txt', 'r') as file:
-            for line in file:
-                line = line.strip()
-                if line:
-                    number, letters = line.split()
-                    self.letter2_freq[letters.lower()] = float(number)
-                else:
-                    break
-
-        with open('dict.txt', 'r') as file:
-            self.dict_words = [line.strip() for line in file if line.strip() != ""]
+global WORST
+WORST = []
 
 
-class Solution:
-    def __init__(self, perm):
-        self.perm = perm
-        self.words = []
-        self.fitness = 0
-
-    def set_perm(self, perm):
-        self.perm = perm
-
-    def init_words(self, enc_words):
-        permuted_words = []
-        for word in enc_words:
-            permuted_word = ''
-            for letter in word:
-                permuted_letter = self.perm.get(letter.lower())
-                if permuted_letter is None:
-                    permuted_word += letter.lower()
-                else:
-                    permuted_word += permuted_letter
-            permuted_words.append(permuted_word)
-        self.words = permuted_words
+def load_dictionary(file_path):
+    with open(file_path, 'r') as file:
+        return set(line.strip().lower() for line in file)
 
 
-    def do_mutate(self):
-        letters = list(string.ascii_lowercase)
-        index1 = random.randint(0, NUM_OF_LETTERS - 1)
-        index2 = random.randint(0, NUM_OF_LETTERS - 1)
-        while index1 == index2:
-            index2 = random.randint(0, NUM_OF_LETTERS - 1)
-
-        tmp = self.perm[letters[index1]]
-        self.perm[letters[index1]] = self.perm[letters[index2]]
-        self.perm[letters[index2]] = tmp
+def load_letter_frequencies(file_path):
+    frequencies = {}
+    with open(file_path, 'r') as file:
+        for line in file:
+            probability, letter = line.split()
+            frequencies[letter.lower()] = float(probability)
+    return frequencies
 
 
-def calculate_fitness_of_individuals(problem, population):
-    letter_freq_array_dis = []
-    letter2_freq_array_dis = []
-    num_of_hits_array = []
+def load_letter_pair_frequencies(file_path):
+    frequencies = {}
+    with open(file_path, 'r') as file:
+        for line in file :
+            line = line.strip()
+            if line == "":
+                break
+            probability, letter_pair = line.split()
+            frequencies[letter_pair.lower()] = float(probability)
 
-    for solution in population:
-        num_of_hits = 0
-
-        # initial dict of letters, all the value are 0
-        ascii_dict = {ascii_value: 0 for ascii_value in string.ascii_lowercase}
-
-        # initial dict of pairs of letters, all the value are 0
-        pair_dict = {}
-        for letter1 in string.ascii_lowercase:
-            for letter2 in string.ascii_lowercase:
-                pair = letter1 + letter2
-                pair_dict[pair] = 0
-
-        # check hits, for each letter we count the number of appearance, same to pairs
-        for word in solution.words:
-            if word in problem.dict_words:
-                num_of_hits += 1
-            for letter in word:
-                ascii_dict[letter] += 1
-            for i in range(len(word) - 1):
-                pair = word[i: i + 2]
-                pair_dict[pair] += 1
-
-        num_of_hits_array.append(num_of_hits)
-
-        # normalize the count of appearance of letters to percentage
-        sum_of_letters = sum(ascii_dict.values())
-
-        sum_letter_freq = 0
-        for letter in ascii_dict:
-            ascii_dict[letter] /= sum_of_letters
-            sum_letter_freq += abs(problem.letter_freq[letter] - ascii_dict[letter])
-        letter_freq_array_dis.append(sum_letter_freq)
-
-        # normalize the count of appearance of pairs of letters to percentage
-        sum_of_pairs = sum(pair_dict.values())
-        sum_pair_freq = 0
-        for pair in pair_dict:
-            pair_dict[pair] /= sum_of_pairs
-            sum_pair_freq += abs(problem.letter2_freq[pair] - pair_dict[pair])
-        letter2_freq_array_dis.append(sum_pair_freq)
-
-    total_letter_freq = sum(letter_freq_array_dis)
-    total_letter2_freq = sum(letter2_freq_array_dis)
-
-    for i, solution in enumerate(population):
-        solution.fitness = 0
-        solution.fitness += (num_of_hits_array[i] / problem.num_of_words_in_enc) * 0.7
-        solution.fitness += (letter_freq_array_dis[i] / total_letter_freq) * 0.2
-        solution.fitness += (letter2_freq_array_dis[i] / total_letter2_freq) * 0.1
+    return frequencies
 
 
-def init_population(problem):
-    solutions = []
-    for i in range(NUM_OF_SOLUTIONS):
-        letters = list(string.ascii_lowercase)
-        random.shuffle(letters)
-        sol = Solution(dict(zip(string.ascii_lowercase, letters)))
-        sol.init_words(problem.words)
-        solutions.append(sol)
-    calculate_fitness_of_individuals(problem, solutions)
-
-    return solutions
+def check_duplicate_values(mapping):
+    value_count = {}
+    for value in mapping.values():
+        if value in value_count:
+            return True  # Duplicate value found
+        value_count[value] = 1
+    return False
 
 
-def select_parent(population):
-    # Extract the fitness values from the solutions
-    fitness_values = [solution.fitness for solution in population]
-
-    # Randomly choose a solution based on the weights
-    selected_solution = random.choices(population, weights=fitness_values)[0]
-
-    return selected_solution
+def generate_random_mapping():
+    letters = list(string.ascii_lowercase)
+    random.shuffle(letters)
+    sol = dict(zip(string.ascii_lowercase, letters))
+    return sol
 
 
-def crossover(problem, parent1, parent2):
-    index = random.randint(0, NUM_OF_LETTERS - 1)
+def decrypt_text(text, mapping):
+    decrypted_text = ''
+    for char in text:
+        decrypted_text += mapping.get(char, char)
+    return decrypted_text
+
+
+def calculate_fitness(decrypted_text, dictionary, letter_frequencies, letter_pair_frequencies):
+    global FITNESS_COUNT
+    FITNESS_COUNT += 1
+    words = re.findall(r'\b\w+\b', decrypted_text)
+    ascii_dict = {ascii_value: 0 for ascii_value in string.ascii_lowercase}
+
+    # initial dict of pairs of letters, all the value are 0
+    pair_dict = {}
+    for letter1 in string.ascii_lowercase:
+        for letter2 in string.ascii_lowercase:
+            pair = letter1 + letter2
+            pair_dict[pair] = 0
+
+    num_of_hits = 0
+    for word in words:
+        word = word.strip()
+        if word in dictionary:
+            num_of_hits += 1
+        for letter in word:
+            ascii_dict[letter] += 1
+        for i in range(len(word) - 1):
+            pair = word[i: i + 2]
+            pair_dict[pair] += 1
+
+    sum_of_letters = sum(ascii_dict.values())
+    sum_letter_freq = 0
+    for letter in ascii_dict:
+        val = ascii_dict[letter] / sum_of_letters
+        sum_letter_freq += abs(letter_frequencies[letter] - val) ** 2
+
+    sum_of_pairs = sum(pair_dict.values())
+    sum_pair_freq = 0
+    for pair in pair_dict:
+        val = pair_dict[pair] / sum_of_pairs
+        sum_pair_freq += abs(letter_pair_frequencies[pair] - val) ** 2
+
+    return num_of_hits, num_of_hits - sum_letter_freq * 10 - sum_pair_freq * 10 + 100
+
+
+def select_parents(population, fitness_scores):
+    return random.choices(population, fitness_scores, k=2)
+
+
+def crossover(parent1, parent2):
+    index = random.randint(0, 25)
 
     # put letters from parent1
-    new_perm = parent1.perm.copy()
+    child = parent1.copy()
     letters_set = set(string.ascii_lowercase)
 
     # remove mapping, tot the keys!!!
     for ascii_value in range(ord('a'), ord('a') + index):
-        letters_set.remove(parent1.perm[chr(ascii_value)])
+        letters_set.remove(parent1[chr(ascii_value)])
 
     # put letters from parent2
     for ascii_value in range(ord('a') + index, ord('z') + 1):
-        if parent2.perm[chr(ascii_value)] not in letters_set:
-            new_perm[chr(ascii_value)] = ""
+        if parent2[chr(ascii_value)] not in letters_set:
+            child[chr(ascii_value)] = ""
         else:
-            new_perm[chr(ascii_value)] = parent2.perm[chr(ascii_value)]
-            letters_set.remove(parent2.perm[chr(ascii_value)])
+            child[chr(ascii_value)] = parent2[chr(ascii_value)]
+            letters_set.remove(parent2[chr(ascii_value)])
 
     # fix errors
-    for key in new_perm.keys():
-        if new_perm[key] == "":
-            new_perm[key] = letters_set.pop()
-    sol = Solution(new_perm)
-    sol.init_words(problem.words)
-    return sol
+    for key in child.keys():
+        if child[key] == "":
+            child[key] = letters_set.pop()
+
+    return child
 
 
-def get_fitness(solution):
-    return solution.fitness
+def mutate(mapping, big_muted):
+    mute_rate = MUTATE_RATE
+    letter_rate = LETTER_TO_CHANGE
+    if big_muted:
+        mute_rate = BIG_MUTATE_RATE
+        letter_rate = BIG_LETTER_TO_CHANGE
+    if random.random() >= mute_rate:
+        return mapping
+    letters = list(string.ascii_lowercase)
+    for letter in mapping:
+        if random.random() < letter_rate:
+            letter_to_swap = random.randint(0, 25)
+            while letters[letter_to_swap] == letter:
+                letter_to_swap = random.randint(0, 25)
+            tmp = mapping[letter]
+            mapping[letter] = mapping[letters[letter_to_swap]]
+            mapping[letters[letter_to_swap]] = tmp
+    return mapping
 
 
-def mutate(new_population):
-    number_of_mutations = round(PERCENTE_TO_MUTATE * NUM_OF_SOLUTIONS)
-    random_array = random.sample(range(0, NUM_OF_SOLUTIONS - 1), number_of_mutations)
+def genetic_algorithm(ciphertext, dictionary, letter_frequencies, letter_pair_frequencies):
+    global LEN_ENC
+    LEN_ENC = len(ciphertext.lower().split())
+    stack = [0] * 10
+    population = [generate_random_mapping() for _ in range(POPULATION_SIZE)]
+    best_mapping = None
+    for generation in range(MAX_GENERATION):
 
-    for index in random_array:
-        new_population[index].do_mutate()
+        fitness_scores = []
+        for mapping in population:
+            decrypted_text = decrypt_text(ciphertext, mapping)
+            _, fitness = calculate_fitness(decrypted_text, dictionary, letter_frequencies, letter_pair_frequencies)
+            fitness_scores.append(fitness)
 
+        avg_fitness = sum(fitness_scores) / POPULATION_SIZE
+        best_fitness = max(fitness_scores)
+        best_mapping = population[fitness_scores.index(best_fitness)]
+        best_decrypt_text = decrypt_text(ciphertext, best_mapping)
+        hit_rate, res = calculate_fitness(decrypt_text(ciphertext, best_mapping), dictionary, letter_frequencies, letter_pair_frequencies)
 
-# 5% of the new population will be the best 5% of the old population
-# 95% crossover
-# 20% of the new population will be mutate
-def next_gen(problem, population):
-    new_population = []
-
-    population.sort(key=get_fitness, reverse=True)
-    print("the best fitness is:" + str(population[0].fitness))
-    num_of_best_sol = round(PERCENT_TO_DUPLICATE * NUM_OF_SOLUTIONS)
-    new_population = population[:num_of_best_sol]
-
-    while len(new_population) < NUM_OF_SOLUTIONS:
-        parent1 = select_parent(population)
-        parent2 = select_parent(population)
-
-        child = crossover(problem, parent1, parent2)
-        new_population.append(child)
-
-    mutate(new_population)
-    calculate_fitness_of_individuals(problem, new_population)
-    return new_population
+        BEST.append(best_fitness)
+        AVG.append(avg_fitness)
+        WORST.append(min(fitness_scores))
 
 
-def write_sol(problem, population):
-    pass
+        stack[generation % 10] = hit_rate
+        big_muted = False
+        if sum(hit_rate == value for value in stack) == 7:
+            big_muted = True
+        if all(hit_rate == value for value in stack):
+            if hit_rate / LEN_ENC < 0.7:
+                return False, best_decrypt_text, best_fitness, best_mapping
+            else:
+                return True, best_decrypt_text, best_fitness, best_mapping
 
+        print(str(hit_rate / LEN_ENC) + ", gen number is:" + str(generation))
 
-def genetic_algorithm(problem, population):
-    generation = 0
-    while generation < MAX_GENERATION:  # max, min avg
-        population = next_gen(problem, population)
-        generation += 1
-    write_sol(problem, population)
-    print("Number of generations is:" + str(generation))
+        new_population = [mutate(best_mapping, big_muted)] * round(POPULATION_SIZE * NUM_BEST_TO_DUPLICATE)
+
+        while len(new_population) < POPULATION_SIZE:
+            parent1, parent2 = select_parents(population, fitness_scores)
+            new_population.append(mutate(crossover(parent1, parent2), big_muted))
+
+        population = new_population
+
+    return False, decrypt_text(ciphertext, best_mapping)
 
 
 def main():
-    problem = Problem()
-    population = init_population(problem)
-    genetic_algorithm(problem, population)
+    ciphertext_file = 'enc.txt'
+    dictionary_file = 'dict.txt'
+    letter_frequencies_file = 'Letter_freq.txt'
+    letter_pair_frequencies_file = 'Letter2_freq.txt'
+
+    ciphertext = ''
+    with open(ciphertext_file, 'r') as file:
+        ciphertext = file.read().strip()
+
+    dictionary = load_dictionary(dictionary_file)
+    letter_frequencies = load_letter_frequencies(letter_frequencies_file)
+    letter_pair_frequencies = load_letter_pair_frequencies(letter_pair_frequencies_file)
+
+    start_time = time.time()
+    best_fitness = 0
+    best_mapping = {}
+    best_decrypted_text = ''
+    for i in range(10):
+        solved, decrypted_text, fitness, mapping = genetic_algorithm(ciphertext, dictionary, letter_frequencies, letter_pair_frequencies)
+        if fitness > best_fitness:
+            best_fitness = fitness
+            best_mapping = mapping
+            best_decrypted_text = decrypted_text
+
+        if solved:
+            break
+
+    end_time = time.time()
+    execution_time = end_time - start_time
+    print("Execution time:", execution_time, "seconds")
+    print(best_decrypted_text)
+
+    with open("plain.txt", 'w') as file:
+        file.write(best_decrypted_text)
+    with open("perm.txt", 'w') as file:
+        for key, value in best_mapping.items():
+            file.write(f"{key} {value}\n")
+    print("The number of times the fitness function was called is: " + str(FITNESS_COUNT))
 
 
 if __name__ == '__main__':
-    main()
+    for i in range(10):
+        BEST = []
+        AVG = []
+        WORST = []
+        print("**************************************" + str(i) + "*********************************************")
+        main()
+        # Saving data to CSV
+        data = zip(BEST, AVG, WORST)
+        csv_filename = 'scores.csv'
+
+        with open(csv_filename, 'w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(['BEST', 'AVG', 'WORST'])
+            writer.writerows(data)
+
+        print(f"The scores have been saved to {csv_filename}.")
+
+        # Creating the graph
+        x = range(1, len(BEST) + 1)
+
+        plt.plot(x, BEST, label='BEST')
+        plt.plot(x, AVG, label='AVG')
+        plt.plot(x, WORST, label='WORST')
+
+        plt.xlabel('Generation')
+        plt.ylabel('Fitness')
+        plt.title('Regular Genetic algorithm - Scores Comparison')
+        plt.legend()
+
+        plt.show()

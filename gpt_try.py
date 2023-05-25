@@ -17,7 +17,7 @@ with open(encrypted_file, 'r') as file:
     encrypted_text = file.read()
 
 # Genetic algorithm parameters
-POPULATION_SIZE = 1000
+POPULATION_SIZE = 500
 TOURNAMENT_SIZE = 5
 MUTATION_RATE = 0.2
 BIG_MUTATION_RATE = 0.9
