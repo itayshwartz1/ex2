@@ -1,7 +1,7 @@
 import random
 import string
+import matplotlib.pyplot as plt
 
-# Constants
 POPULATION_SIZE = 100
 TOURNAMENT_RATE = 0.2
 TOURNAMENT_SIZE = 10
@@ -17,6 +17,17 @@ LETTER2_APPEARANCE = {combination: 0 for combination in [i + j for i in LETTERS 
 LOCAL_MAX_RATE = int(0.05 * POPULATION_SIZE)
 ELITISM = 0.1
 MAX_POWER_MODE = 12
+
+
+
+global AVG
+AVG = []
+
+global BEST
+BEST = []
+
+global WORST
+WORST = []
 
 global FITNESS_STEPS
 FITNESS_STEPS = 0
@@ -100,10 +111,8 @@ def decrypt_text(enc_text, mapping):
     decrypted_text = []
     for letter in enc_text:
         if letter in mapping:
-            # real letter
             decrypted_text.append(mapping[letter_to_index(letter) - 1])
         else:
-            # not real letter
             decrypted_text.append(letter)
     return ''.join(decrypted_text)
 
@@ -165,6 +174,7 @@ def fitness(decrypted_text):
 
 
 def genetic_algorithm(encrypted_text):
+
     global MUTATION_RATE, CROSSOVER_RATE
     hit_rate_counter = 0
     max_fitness = 0
@@ -174,6 +184,7 @@ def genetic_algorithm(encrypted_text):
     prev_best_fitness = 0
     population = create_population()
     best_mapping = []
+
     for gen in range(MAX_GEN):
         fitness_scores = []
         for child in population:
@@ -184,7 +195,6 @@ def genetic_algorithm(encrypted_text):
                 max_fitness = fitness_res
                 current_max_hit_rate = hit_rate
 
-        # calculating the best fitness and table
         current_best_fitness = max(fitness_scores)
         best_mapping = population[fitness_scores.index(current_best_fitness)]
 
@@ -194,15 +204,16 @@ def genetic_algorithm(encrypted_text):
             prev_max_hit_rate = current_max_hit_rate
             hit_rate_counter = 0
 
+        BEST.append(current_best_fitness)
+        AVG.append(sum(fitness_scores) / POPULATION_SIZE)
+        WORST.append(min(fitness_scores))
 
         print("the best hitrate is ", current_max_hit_rate)
-        # building the local maximum
         if current_best_fitness == prev_best_fitness:
             best_fitness_counter += 1
         else:
             prev_best_fitness = current_best_fitness
             best_fitness_counter = 0
-        # checking the local maximum. כמה דורות אני נמצא באותו ערך אז אני משנה את המוטציות
         if best_fitness_counter == LOCAL_MAX_RATE or hit_rate_counter == LOCAL_MAX_RATE:
             MUTATION_RATE = 1
             CROSSOVER_RATE = 1
@@ -223,8 +234,9 @@ def genetic_algorithm(encrypted_text):
             CROSSOVER_RATE = 0.4
             MUTATION_RATE = 0.2
 
-        if best_fitness_counter == 15 or hit_rate_counter == 15 or current_max_hit_rate == 1:
-            break
+        if current_max_hit_rate > 0.5:
+            if best_fitness_counter == 15 or hit_rate_counter == 15 or current_max_hit_rate == 1:
+                break
 
     best_text = decrypt_text(encrypted_text, best_mapping)
     with open("plain.txt", "w") as file:
@@ -236,5 +248,17 @@ def genetic_algorithm(encrypted_text):
 
     print("The number of calls to fitness function is: " + str(FITNESS_STEPS))
 
+    # x = range(1, len(BEST) + 1)
+    #
+    # plt.plot(x, BEST, label='BEST')
+    # plt.plot(x, AVG, label='AVG')
+    # plt.plot(x, WORST, label='WORST')
+    #
+    # plt.xlabel('Generation')
+    # plt.ylabel('Fitness')
+    # plt.title('Regular Genetic algorithm - Scores Comparison')
+    # plt.legend()
+    #
+    # plt.show()
 
 genetic_algorithm(ENC_TXT)

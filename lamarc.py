@@ -1,27 +1,24 @@
-'''
-Itay Shwartz 318528171
-Noa Eitan 316222777
-'''
 import random
 import string
-import re
-import time
-import csv
 import matplotlib.pyplot as plt
 
-NUM_BEST_TO_DUPLICATE = 0.2
-MUTATE_RATE = 0.2
-BIG_MUTATE_RATE = 0.7
-LETTER_TO_CHANGE = 2 / 26
-BIG_LETTER_TO_CHANGE = 8 / 26
-MAX_GENERATION = 1000
-POPULATION_SIZE = 500
-N = 4
+POPULATION_SIZE = 100
+TOURNAMENT_RATE = 0.2
+TOURNAMENT_SIZE = 10
+MUTATION_RATE = 0.2
+MAX_GEN = 500
+CROSSOVER_RATE = 0.4
+RESULTS_FOR_NEXT = 0.1
+HIT_RATE = 0
+LAST_PAIR = 'ZZ'
+LETTERS = string.ascii_lowercase
+LETTER_APPEARANCE = {letter: 0 for letter in LETTERS}
+LETTER2_APPEARANCE = {combination: 0 for combination in [i + j for i in LETTERS for j in LETTERS]}
+LOCAL_MAX_RATE = int(0.05 * POPULATION_SIZE)
+ELITISM = 0.1
+MAX_POWER_MODE = 12
+N = 3
 
-global LEN_ENC
-LEN_ENC = 0
-global FITNESS_COUNT
-FITNESS_COUNT = 0
 
 global AVG
 AVG = []
@@ -32,286 +29,256 @@ BEST = []
 global WORST
 WORST = []
 
-
-def load_dictionary(file_path):
-    with open(file_path, 'r') as file:
-        return set(line.strip().lower() for line in file)
+global FITNESS_STEPS
+FITNESS_STEPS = 0
 
 
-def load_letter_frequencies(file_path):
-    frequencies = {}
-    with open(file_path, 'r') as file:
+def read_enc(filename):
+    with open(filename, "r") as file:
+        return file.read().lower().strip()
+
+
+def read_letter_freq(filename):
+    freq = {}
+    with open(filename, "r") as file:
         for line in file:
-            probability, letter = line.split()
-            frequencies[letter.lower()] = float(probability)
-    return frequencies
+            f, l = line.strip().split()
+            freq[l.lower()] = float(f)
+    return freq
 
 
-def load_letter_pair_frequencies(file_path):
-    frequencies = {}
-    with open(file_path, 'r') as file:
-        for line in file :
-            line = line.strip()
-            if line == "":
+def read_letter2_freq(filename):
+    freq = {}
+    with open(filename, "r") as file:
+        for line in file:
+            f, l2 = line.strip().split()
+            freq[l2.lower()] = float(f)
+            if l2 == LAST_PAIR:
                 break
-            probability, letter_pair = line.split()
-            frequencies[letter_pair.lower()] = float(probability)
-
-    return frequencies
+    return freq
 
 
-def check_duplicate_values(mapping):
-    value_count = {}
-    for value in mapping.values():
-        if value in value_count:
-            return True  # Duplicate value found
-        value_count[value] = 1
-    return False
+def read_dict(filename):
+    dictionary = set()
+    with open(filename, "r") as file:
+        for line in file:
+            if line.strip() != "":
+                dictionary.add(line.strip().lower())
+    return dictionary
 
 
-def generate_random_mapping():
-    letters = list(string.ascii_lowercase)
-    random.shuffle(letters)
-    sol = dict(zip(string.ascii_lowercase, letters))
-    return sol
+LETTER_FREQ = read_letter_freq("Letter_Freq.txt")
+LETTER2_FREQ = read_letter2_freq("Letter2_Freq.txt")
+DICT = read_dict("dict.txt")
+ENC_TXT = read_enc("enc.txt")
+LEN_ENC = len(ENC_TXT.split())
 
 
-def decrypt_text(text, mapping):
-    decrypted_text = ''
-    for char in text:
-        decrypted_text += mapping.get(char, char)
-    return decrypted_text
+def create_population():
+    population = []
+    for i in range(POPULATION_SIZE):
+        child = list(string.ascii_lowercase)
+        random.shuffle(child)
+        population.append(child)
+    return population
 
 
-def calculate_fitness(decrypted_text, dictionary, letter_frequencies, letter_pair_frequencies):
-    global FITNESS_COUNT
-    FITNESS_COUNT += 1
-    words = re.findall(r'\b\w+\b', decrypted_text)
-    ascii_dict = {ascii_value: 0 for ascii_value in string.ascii_lowercase}
+def fix_child(child):
+    letter_to_add = set()
+    unique_letters = set()
+    for letter in LETTERS:
+        count = child.count(letter)
+        if count > 1 or count == 0:
+            letter_to_add.add(letter)
+        else:
+            unique_letters.add(letter)
 
-    # initial dict of pairs of letters, all the value are 0
-    pair_dict = {}
-    for letter1 in string.ascii_lowercase:
-        for letter2 in string.ascii_lowercase:
-            pair = letter1 + letter2
-            pair_dict[pair] = 0
+    fixed_child = []
+    for char in child:
+        if char in unique_letters:
+            fixed_child.append(char)
+        else:
+            fixed_child.append(letter_to_add.pop())
 
-    num_of_hits = 0
-    for word in words:
-        word = word.strip()
-        if word in dictionary:
-            num_of_hits += 1
-        for letter in word:
-            ascii_dict[letter] += 1
-        for i in range(len(word) - 1):
-            pair = word[i: i + 2]
-            pair_dict[pair] += 1
-
-    sum_of_letters = sum(ascii_dict.values())
-    sum_letter_freq = 0
-    for letter in ascii_dict:
-        val = ascii_dict[letter] / sum_of_letters
-        sum_letter_freq += abs(letter_frequencies[letter] - val) ** 2
-
-    sum_of_pairs = sum(pair_dict.values())
-    sum_pair_freq = 0
-    for pair in pair_dict:
-        val = pair_dict[pair] / sum_of_pairs
-        sum_pair_freq += abs(letter_pair_frequencies[pair] - val) ** 2
-
-    return num_of_hits, num_of_hits - sum_letter_freq * 10 - sum_pair_freq * 10 + 100
+    return fixed_child
 
 
-def select_parents(population, fitness_scores):
-    return random.choices(population, fitness_scores, k=2)
+def letter_to_index(letter):
+    return LETTERS.index(letter) + 1
+
+
+def decrypt_text(enc_text, mapping):
+    decrypted_text = []
+    for letter in enc_text:
+        if letter in mapping:
+            decrypted_text.append(mapping[letter_to_index(letter) - 1])
+        else:
+            decrypted_text.append(letter)
+    return ''.join(decrypted_text)
 
 
 def crossover(parent1, parent2):
-    index = random.randint(0, 25)
-
-    # put letters from parent1
-    child = parent1.copy()
-    letters_set = set(string.ascii_lowercase)
-
-    # remove mapping, tot the keys!!!
-    for ascii_value in range(ord('a'), ord('a') + index):
-        letters_set.remove(parent1[chr(ascii_value)])
-
-    # put letters from parent2
-    for ascii_value in range(ord('a') + index, ord('z') + 1):
-        if parent2[chr(ascii_value)] not in letters_set:
-            child[chr(ascii_value)] = ""
-        else:
-            child[chr(ascii_value)] = parent2[chr(ascii_value)]
-            letters_set.remove(parent2[chr(ascii_value)])
-
-    # fix errors
-    for key in child.keys():
-        if child[key] == "":
-            child[key] = letters_set.pop()
-
-    return child
+    if random.random() < CROSSOVER_RATE:
+        index = random.randint(1, len(parent1) - 2)
+        return fix_child(parent1[:index] + parent2[index:]), fix_child(parent2[:index] + parent1[index:])
+    return parent1, parent2
 
 
-def mutate(mapping, big_muted):
-    mute_rate = MUTATE_RATE
-    letter_rate = LETTER_TO_CHANGE
-    if big_muted:
-        mute_rate = BIG_MUTATE_RATE
-        letter_rate = BIG_LETTER_TO_CHANGE
-    if random.random() >= mute_rate:
-        return mapping
-    letters = list(string.ascii_lowercase)
-    for letter in mapping:
-        if random.random() < letter_rate:
-            letter_to_swap = random.randint(0, 25)
-            while letters[letter_to_swap] == letter:
-                letter_to_swap = random.randint(0, 25)
-            tmp = mapping[letter]
-            mapping[letter] = mapping[letters[letter_to_swap]]
-            mapping[letters[letter_to_swap]] = tmp
+def mutate(mapping):
+    if random.random() < MUTATION_RATE:
+        i, j = random.sample(range(26), 2)
+        mapping[i], mapping[j] = mapping[j], mapping[i]
     return mapping
 
-def local_optimization(mapping, origin_fitness, ciphertext, dictionary, letter_frequencies, letter_pair_frequencies):
-    origin_mapping = mapping.copy()
-    letters = string.ascii_lowercase
+
+def get_parents(population):
+    tournament = random.sample(population, TOURNAMENT_SIZE)
+    parent1 = max(tournament, key=lambda x: x[1])
+    tournament.remove(parent1)
+    parent2 = max(tournament, key=lambda x: x[1])
+    return parent1[0], parent2[0]
+
+
+def remove_chars(word):
+    chars_to_remove = ".;,:\n"
+    cleaned_string = word.translate(str.maketrans('', '', chars_to_remove))
+    return cleaned_string.rstrip().lstrip().lower()
+
+def fitness(decrypted_text):
+    global FITNESS_STEPS
+    FITNESS_STEPS += 1
+    letter_appearance = LETTER_APPEARANCE.copy()
+    pairs_appearance = LETTER2_APPEARANCE.copy()
+    hit_rate = 0
+    letter_freq = 0
+    letter2_freq = 0
+
+    for word in decrypted_text:
+        new_word = remove_chars(word)
+        if new_word in DICT:
+            hit_rate += 1
+        size = len(new_word)
+        for i in range(size):
+            letter_appearance[new_word[i]] += 1
+            if i == size - 1:
+                break
+            pair = new_word[i:i + 2]
+            pairs_appearance[pair] += 1
+
+    hit_rate = hit_rate/LEN_ENC
+    for letter in letter_appearance:
+        letter_freq += letter_appearance[letter] * LETTER_FREQ[letter]
+    for pair in pairs_appearance:
+        letter2_freq += pairs_appearance[pair] * LETTER2_FREQ[pair]
+    return (hit_rate + letter_freq + letter2_freq), hit_rate
+
+def local_optimization(original_mapping, origin_fitness):
+    new_mapping = original_mapping.copy()
     for _ in range(N):
-        mapping = origin_mapping.copy()
         i = random.randint(0, 25)
         j = random.randint(0, 25)
         while i == j:
             j = random.randint(0, 25)
-        tmp = mapping[letters[i]]
-        mapping[letters[i]] = mapping[letters[j]]
-        mapping[letters[j]] = tmp
 
-        new_decrypted_text = decrypt_text(ciphertext, mapping)
-        _, new_fitness = calculate_fitness(new_decrypted_text, dictionary, letter_frequencies, letter_pair_frequencies)
+        tmp = new_mapping[i]
+        new_mapping[i] = new_mapping[j]
+        new_mapping[j] = tmp
 
-        if origin_fitness < new_fitness:
-            origin_mapping = mapping.copy()
-            origin_fitness = new_fitness
+    new_fitness, _ = fitness(decrypt_text(ENC_TXT, new_mapping))
+    if new_fitness > origin_fitness:
+        return new_mapping, new_fitness
+    return original_mapping, origin_fitness
 
-    return origin_mapping, origin_fitness
+def genetic_algorithm(encrypted_text):
 
+    global MUTATION_RATE, CROSSOVER_RATE
+    hit_rate_counter = 0
+    max_fitness = 0
+    current_max_hit_rate = 0
+    best_fitness_counter = 0
+    prev_max_hit_rate = 0
+    prev_best_fitness = 0
+    population = create_population()
+    best_mapping = []
 
-
-def genetic_algorithm(ciphertext, dictionary, letter_frequencies, letter_pair_frequencies):
-    global LEN_ENC
-    LEN_ENC = len(ciphertext.lower().split())
-    stack = [0] * 10
-    population = [generate_random_mapping() for _ in range(POPULATION_SIZE)]
-    best_mapping = None
-    for generation in range(MAX_GENERATION):
-
+    for gen in range(MAX_GEN):
         fitness_scores = []
-        for index, mapping in enumerate(population.copy()):
-            decrypted_text = decrypt_text(ciphertext, mapping)
-            _, fitness = calculate_fitness(decrypted_text, dictionary, letter_frequencies, letter_pair_frequencies)
-            new_mapping, new_fitness = local_optimization(mapping.copy(), fitness, ciphertext, dictionary, letter_frequencies,letter_pair_frequencies)
-            population[index] = new_mapping
+        for i, child in enumerate(population):
+            decrypted_text = decrypt_text(encrypted_text, child)
+            fitness_res, hit_rate = fitness(decrypted_text.split())
+            new_mapping, new_fitness = local_optimization(child, fitness_res)
+            population[i] = new_mapping
             fitness_scores.append(new_fitness)
+            if fitness_res > max_fitness:
+                max_fitness = fitness_res
+                current_max_hit_rate = hit_rate
 
-        avg_fitness = sum(fitness_scores) / POPULATION_SIZE
-        best_fitness = max(fitness_scores)
-        best_mapping = population[fitness_scores.index(best_fitness)]
-        best_decrypt_text = decrypt_text(ciphertext, best_mapping)
-        hit_rate, res = calculate_fitness(decrypt_text(ciphertext, best_mapping), dictionary, letter_frequencies, letter_pair_frequencies)
+        current_best_fitness = max(fitness_scores)
+        best_mapping = population[fitness_scores.index(current_best_fitness)]
 
-        BEST.append(best_fitness)
-        AVG.append(avg_fitness)
+        if current_max_hit_rate == prev_max_hit_rate:
+            hit_rate_counter += 1
+        else:
+            prev_max_hit_rate = current_max_hit_rate
+            hit_rate_counter = 0
+
+        BEST.append(current_best_fitness)
+        AVG.append(sum(fitness_scores) / POPULATION_SIZE)
         WORST.append(min(fitness_scores))
 
+        print("the best hitrate is ", current_max_hit_rate)
+        if current_best_fitness == prev_best_fitness:
+            best_fitness_counter += 1
+        else:
+            prev_best_fitness = current_best_fitness
+            best_fitness_counter = 0
+        if best_fitness_counter == LOCAL_MAX_RATE or hit_rate_counter == LOCAL_MAX_RATE:
+            MUTATION_RATE = 1
+            CROSSOVER_RATE = 1
 
-        stack[generation % 10] = hit_rate
-        big_muted = False
-        if sum(hit_rate == value for value in stack) == 7:
-            big_muted = True
-        if all(hit_rate == value for value in stack):
-            if hit_rate / LEN_ENC < 0.7:
-                return False, best_decrypt_text, best_fitness, best_mapping
-            else:
-                return True, best_decrypt_text, best_fitness, best_mapping
 
-        print(str(hit_rate / LEN_ENC) + ", gen number is:" + str(generation))
 
-        new_population = [mutate(best_mapping, big_muted)] * round(POPULATION_SIZE * NUM_BEST_TO_DUPLICATE)
+        population_with_fitness = sorted(list(zip(population, fitness_scores)), key=lambda x: x[1], reverse=True)
+        new_population = [best_mapping] * round(ELITISM * POPULATION_SIZE)
 
         while len(new_population) < POPULATION_SIZE:
-            parent1, parent2 = select_parents(population, fitness_scores)
-            new_population.append(mutate(crossover(parent1, parent2), big_muted))
+            parent1, parent2 = get_parents(population_with_fitness)
+            child1, child2 = crossover(parent1, parent2)
+            new_population.append(mutate(child1))
+            new_population.append(mutate(child2))
 
-        population = new_population
+        population = new_population[:POPULATION_SIZE]
+        if best_fitness_counter == MAX_POWER_MODE:
+            CROSSOVER_RATE = 0.4
+            MUTATION_RATE = 0.2
 
-    return False, decrypt_text(ciphertext, best_mapping)
+        if current_max_hit_rate > 0.5:
+            if best_fitness_counter == 15 or hit_rate_counter == 15 or current_max_hit_rate == 1:
+                break
 
+    best_text = decrypt_text(encrypted_text, best_mapping)
+    with open("plain.txt", "w") as file:
+        file.write(best_text)
 
-def main():
-    ciphertext_file = 'enc.txt'
-    dictionary_file = 'dict.txt'
-    letter_frequencies_file = 'Letter_freq.txt'
-    letter_pair_frequencies_file = 'Letter2_freq.txt'
+    with open("perm.txt", "w") as file:
+        for i, letter in enumerate(LETTERS):
+            file.write(letter + " " + best_mapping[i] + "\n")
 
-    ciphertext = ''
-    with open(ciphertext_file, 'r') as file:
-        ciphertext = file.read().strip()
+    print("The number of calls to fitness function is: " + str(FITNESS_STEPS))
 
-    dictionary = load_dictionary(dictionary_file)
-    letter_frequencies = load_letter_frequencies(letter_frequencies_file)
-    letter_pair_frequencies = load_letter_pair_frequencies(letter_pair_frequencies_file)
+    # x = range(1, len(BEST) + 1)
+    #
+    # plt.plot(x, BEST, label='BEST')
+    # plt.plot(x, AVG, label='AVG')
+    # plt.plot(x, WORST, label='WORST')
+    #
+    # plt.xlabel('Generation')
+    # plt.ylabel('Fitness')
+    # plt.title('Lamarc Genetic algorithm - Scores Comparison')
+    # plt.legend()
+    #
+    # plt.show()
 
-    start_time = time.time()
-    best_fitness = 0
-    best_mapping = {}
-    best_decrypted_text = ''
-    for i in range(10):
-        solved, decrypted_text, fitness, mapping = genetic_algorithm(ciphertext, dictionary, letter_frequencies, letter_pair_frequencies)
-        if fitness > best_fitness:
-            best_fitness = fitness
-            best_mapping = mapping
-            best_decrypted_text = decrypted_text
-
-        if solved:
-            break
-
-    end_time = time.time()
-    execution_time = end_time - start_time
-    print("Execution time:", execution_time, "seconds")
-    print(best_decrypted_text)
-
-    with open("plain.txt", 'w') as file:
-        file.write(best_decrypted_text)
-    with open("perm.txt", 'w') as file:
-        for key, value in best_mapping.items():
-            file.write(f"{key} {value}\n")
-    print("The number of times the fitness function was called is: " + str(FITNESS_COUNT))
+genetic_algorithm(ENC_TXT)
 
 
-if __name__ == '__main__':
-    for i in range(10):
-        print("**************************************" + str(i) + "*********************************************")
-        main()
-        # Saving data to CSV
-        data = zip(BEST, AVG, WORST)
-        csv_filename = 'scores.csv'
-
-        with open(csv_filename, 'w', newline='') as file:
-            writer = csv.writer(file)
-            writer.writerow(['BEST', 'AVG', 'WORST'])
-            writer.writerows(data)
-
-        print(f"The scores have been saved to {csv_filename}.")
-
-        # Creating the graph
-        x = range(1, len(BEST) + 1)
-
-        plt.plot(x, BEST, label='BEST')
-        plt.plot(x, AVG, label='AVG')
-        plt.plot(x, WORST, label='WORST')
-
-        plt.xlabel('Data Point')
-        plt.ylabel('Scores')
-        plt.title('Scores Comparison')
-        plt.legend()
-
-        plt.show()
