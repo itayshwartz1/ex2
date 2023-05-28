@@ -9,6 +9,7 @@ import time
 import csv
 import matplotlib.pyplot as plt
 
+
 NUM_BEST_TO_DUPLICATE = 0.2
 MUTATE_RATE = 0.2
 BIG_MUTATE_RATE = 0.7
@@ -177,6 +178,7 @@ def genetic_algorithm(ciphertext, dictionary, letter_frequencies, letter_pair_fr
     stack = [0] * 10
     population = [generate_random_mapping() for _ in range(POPULATION_SIZE)]
     best_mapping = None
+    random.seed(int(time.time()))
     for generation in range(MAX_GENERATION):
 
         fitness_scores = []
@@ -208,10 +210,22 @@ def genetic_algorithm(ciphertext, dictionary, letter_frequencies, letter_pair_fr
 
         print(str(hit_rate / LEN_ENC) + ", gen number is:" + str(generation))
 
+        # Combine arrays using zip
+        combined = zip(fitness_scores, population)
+
+        # Sort the combined pairs based on the values in array1
+        sorted_combined = sorted(combined, key=lambda x: x[0])
+
+        # Separate the sorted pairs back into separate arrays
+        sorted_fitness, sorted_population = zip(*sorted_combined)
+
+        tmp_population = sorted_population[round(0.5 * POPULATION_SIZE):]
+        tmp_fitness = sorted_fitness[round(0.5 * POPULATION_SIZE):]
+
         new_population = [mutate(best_mapping, big_muted)] * round(POPULATION_SIZE * NUM_BEST_TO_DUPLICATE)
 
         while len(new_population) < POPULATION_SIZE:
-            parent1, parent2 = select_parents(population, fitness_scores)
+            parent1, parent2 = select_parents(tmp_population, tmp_fitness)
             new_population.append(mutate(crossover(parent1, parent2), big_muted))
 
         population = new_population

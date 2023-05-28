@@ -172,7 +172,7 @@ def mutate(mapping, big_muted):
     return mapping
 
 def local_optimization(mapping, origin_fitness, ciphertext, dictionary, letter_frequencies, letter_pair_frequencies):
-    origin_mapping = mapping.deppcopy()
+    origin_mapping = mapping.copy()
     letters = string.ascii_lowercase
     for _ in range(N):
         i = random.randint(0, 25)

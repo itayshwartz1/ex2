@@ -16,7 +16,7 @@ LETTER_TO_CHANGE = 2 / 26
 BIG_LETTER_TO_CHANGE = 8 / 26
 MAX_GENERATION = 1000
 POPULATION_SIZE = 500
-N = 2
+N = 4
 
 global LEN_ENC
 LEN_ENC = 0
@@ -173,9 +173,10 @@ def mutate(mapping, big_muted):
     return mapping
 
 def local_optimization(mapping, origin_fitness, ciphertext, dictionary, letter_frequencies, letter_pair_frequencies):
-    origin_mapping = mapping.deepcopy()
+    origin_mapping = mapping.copy()
     letters = string.ascii_lowercase
     for _ in range(N):
+        mapping = origin_mapping.copy()
         i = random.randint(0, 25)
         j = random.randint(0, 25)
         while i == j:
@@ -184,12 +185,15 @@ def local_optimization(mapping, origin_fitness, ciphertext, dictionary, letter_f
         mapping[letters[i]] = mapping[letters[j]]
         mapping[letters[j]] = tmp
 
-    new_decrypted_text = decrypt_text(ciphertext, mapping)
-    _, new_fitness = calculate_fitness(new_decrypted_text, dictionary, letter_frequencies, letter_pair_frequencies)
+        new_decrypted_text = decrypt_text(ciphertext, mapping)
+        _, new_fitness = calculate_fitness(new_decrypted_text, dictionary, letter_frequencies, letter_pair_frequencies)
 
-    if origin_fitness < new_fitness:
-        return mapping, new_fitness
+        if origin_fitness < new_fitness:
+            origin_mapping = mapping.copy()
+            origin_fitness = new_fitness
+
     return origin_mapping, origin_fitness
+
 
 
 def genetic_algorithm(ciphertext, dictionary, letter_frequencies, letter_pair_frequencies):
@@ -201,11 +205,10 @@ def genetic_algorithm(ciphertext, dictionary, letter_frequencies, letter_pair_fr
     for generation in range(MAX_GENERATION):
 
         fitness_scores = []
-        for index, mapping in enumerate(population):
+        for index, mapping in enumerate(population.copy()):
             decrypted_text = decrypt_text(ciphertext, mapping)
             _, fitness = calculate_fitness(decrypted_text, dictionary, letter_frequencies, letter_pair_frequencies)
-            new_mapping, new_fitness = local_optimization(mapping, fitness, ciphertext, dictionary, letter_frequencies,
-                                                          letter_pair_frequencies)
+            new_mapping, new_fitness = local_optimization(mapping.copy(), fitness, ciphertext, dictionary, letter_frequencies,letter_pair_frequencies)
             population[index] = new_mapping
             fitness_scores.append(new_fitness)
 

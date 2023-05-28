@@ -1,26 +1,26 @@
-a q
-b k
-c i
-d n
-e t
-f o
-g z
-h j
-i c
-j e
-k b
-l l
-m d
-n u
-o y
-p m
-q s
-r v
-s p
-t x
-u r
-v h
-w w
-x g
-y a
-z f
+A -> Y
+B -> K
+C -> X
+D -> N
+E -> T
+F -> O
+G -> Q
+H -> J
+I -> C
+J -> E
+K -> B
+L -> L
+M -> D
+N -> U
+O -> Z
+P -> M
+Q -> S
+R -> V
+S -> P
+T -> I
+U -> R
+V -> H
+W -> W
+X -> G
+Y -> A
+Z -> F
