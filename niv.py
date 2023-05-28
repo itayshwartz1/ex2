@@ -7,18 +7,18 @@ TOURNAMENT_RATE = 0.2
 TOURNAMENT_SIZE = 10
 MUTATION_RATE = 0.2
 MAX_GEN = 200
-CROSSOVER_RATE = 0.4 # סיכוי שיעשה קרוסאובר
-RESULTS_FOR_NEXT = 0.1 #
+CROSSOVER_RATE = 0.4
+RESULTS_FOR_NEXT = 0.1
 HIT_RATE = 0
 LAST_PAIR = 'ZZ'
-LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+LETTERS = string.ascii_lowercase
 
 global FITNESS_STEPS
 FITNESS_STEPS = 0
 
 def read_enc(filename):
     with open(filename, "r") as file:
-        return file.read().upper().strip()
+        return file.read().lower().strip()
 
 
 def read_letter_freq(filename):
@@ -26,7 +26,7 @@ def read_letter_freq(filename):
     with open(filename, "r") as file:
         for line in file:
             f, l = line.strip().split()
-            freq[l] = float(f)
+            freq[l.lower()] = float(f)
     return freq
 
 
@@ -35,7 +35,7 @@ def read_letter2_freq(filename):
     with open(filename, "r") as file:
         for line in file:
             f, l2 = line.strip().split()
-            freq[l2] = float(f)
+            freq[l2.lower()] = float(f)
             if l2 == LAST_PAIR:
                 break
     return freq
@@ -46,7 +46,7 @@ def read_dict(filename):
     with open(filename, "r") as file:
         for line in file:
             if line.strip() != "":
-                dictionary.add(line.strip())
+                dictionary.add(line.strip().lower())
     return dictionary
 
 
@@ -59,7 +59,7 @@ ENC_TXT = read_enc("enc.txt")
 def create_population():
     population = []
     for i in range(POPULATION_SIZE):
-        child = list(string.ascii_uppercase)
+        child = list(string.ascii_lowercase)
         random.shuffle(child)
         population.append(child)
     return population
@@ -115,8 +115,8 @@ def mutate(mapping):
     return mapping
 
 
-def get_parents(dict):
-    tournament = random.sample(dict, TOURNAMENT_SIZE)
+def get_parents(population):
+    tournament = random.sample(population, TOURNAMENT_SIZE)
     parent1 = max(tournament, key=lambda x: x[1])
     tournament.remove(parent1)
     parent2 = max(tournament, key=lambda x: x[1])
@@ -148,9 +148,9 @@ def fitness(decrypted_text):
                 letter2_counts[new_word[i:i + 2]] += 1
     hit_rate = hit_rate/len(decrypted_text)
     for item in letter_counts:
-        letter_freq += abs(letter_counts[item] * LETTER_FREQ[item.upper()])
+        letter_freq += abs(letter_counts[item] * LETTER_FREQ[item.lower()])
     for item in letter2_counts:
-        letter2_freq += abs(letter2_counts[item] * LETTER2_FREQ[item.upper()])
+        letter2_freq += abs(letter2_counts[item] * LETTER2_FREQ[item.lower()])
     return (hit_rate + letter_freq + letter2_freq), hit_rate
 
 
@@ -219,7 +219,7 @@ def genetic_algorithm(encrypted_text):
 
     # Write the substitution table to perm.txt
     with open("perm.txt", "w") as file:
-        for i, letter in enumerate(string.ascii_uppercase):
+        for i, letter in enumerate(string.ascii_lowercase):
             file.write(f"{letter} {best_mapping[i]}\n")
 
     print(f"Number of steps: {FITNESS_STEPS}")
