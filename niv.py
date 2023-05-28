@@ -13,6 +13,9 @@ HIT_RATE = 0
 LAST_PAIR = 'ZZ'
 LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
+global FITNESS_STEPS
+FITNESS_STEPS = 0
+
 def read_enc(filename):
     with open(filename, "r") as file:
         return file.read().upper().strip()
@@ -121,6 +124,9 @@ def get_parents(dict):
 
 
 def fitness(decrypted_text):
+    global FITNESS_STEPS
+    FITNESS_STEPS += 1
+
     hit_rate = 0
     letter_freq = 0
     letter2_freq = 0
@@ -147,14 +153,16 @@ def fitness(decrypted_text):
         letter2_freq += abs(letter2_counts[item] * LETTER2_FREQ[item.upper()])
     return (hit_rate + letter_freq + letter2_freq), hit_rate
 
+
 def genetic_algorithm(encrypted_text):
     global MUTATION_RATE, CROSSOVER_RATE
-    hit_rate_counter, max_fitness, max_hit_rate, steps, local_max = 0, 0, 0, 0, 0
+    hit_rate_counter, max_fitness, max_hit_rate, local_max = 0, 0, 0, 0
     s, f = set(), set() # max localy
     population = create_population()
     best_mapping = []
     for _ in range(MAX_GEN):
-        fitness_scores, new_population = [], []
+        fitness_scores = []
+        new_population = []
         for child in population:
             decrypted_text = decrypt_text(encrypted_text, child)
             fitness_res, hit_rate = fitness(decrypted_text.split())
@@ -173,7 +181,6 @@ def genetic_algorithm(encrypted_text):
         # calculating the best fitness and table
         best_fitness = max(fitness_scores)
         best_mapping = population[fitness_scores.index(best_fitness)]
-        print("the best fitness of iteration ", steps, "is ", best_fitness)
         print("the best hitrate is ", max_hit_rate)
         # building the local maximum
         if best_fitness in f:
@@ -204,7 +211,6 @@ def genetic_algorithm(encrypted_text):
             print("CHANGED BACK THE MUTATION RATE TO 0.2")
             CROSSOVER_RATE = 0.4
             MUTATION_RATE = 0.2
-        steps += 1
 
     best_decrypted_text = decrypt_text(encrypted_text, best_mapping)
     # Write the decrypted text to plain.txt
@@ -214,9 +220,9 @@ def genetic_algorithm(encrypted_text):
     # Write the substitution table to perm.txt
     with open("perm.txt", "w") as file:
         for i, letter in enumerate(string.ascii_uppercase):
-            file.write(f"{letter} -> {best_mapping[i]}\n")
+            file.write(f"{letter} {best_mapping[i]}\n")
 
-    print(f"Number of steps: {steps}")
+    print(f"Number of steps: {FITNESS_STEPS}")
 
 
 genetic_algorithm(ENC_TXT)
