@@ -165,11 +165,15 @@ def fitness(decrypted_text):
 
 def genetic_algorithm(encrypted_text):
     global MUTATION_RATE, CROSSOVER_RATE
-    hit_rate_counter, max_fitness, max_hit_rate, local_max = 0, 0, 0, 0
-    s, f = set(), set() # max localy
+    hit_rate_counter = 0
+    max_fitness = 0
+    current_max_hit_rate = 0
+    local_max = 0
+    prev_max_hit_rate = 0
+    f = set() # max localy
     population = create_population()
     best_mapping = []
-    for _ in range(MAX_GEN):
+    for gen in range(MAX_GEN):
         fitness_scores = []
         new_population = []
         for child in population:
@@ -178,19 +182,17 @@ def genetic_algorithm(encrypted_text):
             fitness_scores.append(fitness_res)
             if fitness_res > max_fitness:
                 max_fitness = fitness_res
-                max_hit_rate = hit_rate
-        if max_hit_rate in s:
+                current_max_hit_rate = hit_rate
+        if current_max_hit_rate == prev_max_hit_rate:
             hit_rate_counter += 1
         else:
-            if s != set():
-                s.pop()
-            s.add(max_hit_rate)
+            prev_max_hit_rate = current_max_hit_rate
             hit_rate_counter = 0
 
         # calculating the best fitness and table
         best_fitness = max(fitness_scores)
         best_mapping = population[fitness_scores.index(best_fitness)]
-        print("the best hitrate is ", max_hit_rate)
+        print("the best hitrate is ", current_max_hit_rate)
         # building the local maximum
         if best_fitness in f:
             local_max += 1
