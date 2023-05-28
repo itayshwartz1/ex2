@@ -12,6 +12,8 @@ RESULTS_FOR_NEXT = 0.1
 HIT_RATE = 0
 LAST_PAIR = 'ZZ'
 LETTERS = string.ascii_lowercase
+LETTER_APPEARANCE = {letter: 0 for letter in LETTERS}
+LETTER2_APPEARANCE = {combination: 0 for combination in [i + j for i in LETTERS for j in LETTERS]}
 
 global FITNESS_STEPS
 FITNESS_STEPS = 0
@@ -135,30 +137,29 @@ def remove_chars(string):
 def fitness(decrypted_text):
     global FITNESS_STEPS
     FITNESS_STEPS += 1
-
+    letter_appearance = LETTER_APPEARANCE.copy()
+    pairs_appearance = LETTER2_APPEARANCE.copy()
     hit_rate = 0
     letter_freq = 0
     letter2_freq = 0
 
-    letter_counts = {letter: 0 for letter in string.ascii_lowercase}
-    letters = string.ascii_lowercase
-    two_letter_combinations = [a + b for a in letters for b in letters]
-    letter2_counts = {combination: 0 for combination in two_letter_combinations}
     for word in decrypted_text:
         new_word = remove_chars(word)
         if new_word in DICT:
             hit_rate += 1
         size = len(new_word)
         for i in range(size):
-            letter_counts[new_word[i]] += 1
+            letter_appearance[new_word[i]] += 1
             if i == size - 1:
                 break
-            letter2_counts[new_word[i:i + 2]] += 1
+            pair = new_word[i:i + 2]
+            pairs_appearance[pair] += 1
+
     hit_rate = hit_rate/LEN_ENC
-    for letter in letter_counts:
-        letter_freq += letter_counts[letter] * LETTER_FREQ[letter]
-    for pair in letter2_counts:
-        letter2_freq += letter2_counts[pair] * LETTER2_FREQ[pair]
+    for letter in letter_appearance:
+        letter_freq += letter_appearance[letter] * LETTER_FREQ[letter]
+    for pair in pairs_appearance:
+        letter2_freq += pairs_appearance[pair] * LETTER2_FREQ[pair]
     return (hit_rate + letter_freq + letter2_freq), hit_rate
 
 
