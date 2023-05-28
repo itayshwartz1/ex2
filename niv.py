@@ -54,6 +54,7 @@ LETTER_FREQ = read_letter_freq("Letter_Freq.txt")
 LETTER2_FREQ = read_letter2_freq("Letter2_Freq.txt")
 DICT = read_dict("dict.txt")
 ENC_TXT = read_enc("enc.txt")
+LEN_ENC = len(ENC_TXT.split())
 
 
 def create_population():
@@ -144,18 +145,16 @@ def fitness(decrypted_text):
     two_letter_combinations = [a + b for a in letters for b in letters]
     letter2_counts = {combination: 0 for combination in two_letter_combinations}
     for word in decrypted_text:
-        #new_word = word.replace(",", "").replace(".", "").replace("/", "").replace(":", "").replace(";","").rstrip().lstrip().lower()
         new_word = remove_chars(word)
         if new_word in DICT:
             hit_rate += 1
-        for i in range(len(new_word)):
-            if new_word[i].isalpha():
-                letter_counts[new_word[i]] += 1
-            if i == len(new_word) - 1:
+        size = len(new_word)
+        for i in range(size):
+            letter_counts[new_word[i]] += 1
+            if i == size - 1:
                 break
-            if new_word[i].isalpha() and new_word[i + 1].isalpha():
-                letter2_counts[new_word[i:i + 2]] += 1
-    hit_rate = hit_rate/len(decrypted_text)
+            letter2_counts[new_word[i:i + 2]] += 1
+    hit_rate = hit_rate/LEN_ENC
     for letter in letter_counts:
         letter_freq += letter_counts[letter] * LETTER_FREQ[letter]
     for pair in letter2_counts:
