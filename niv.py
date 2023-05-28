@@ -123,6 +123,14 @@ def get_parents(population):
     return parent1[0], parent2[0]
 
 
+def remove_chars(string):
+    # Define the characters to remove
+    chars_to_remove = ".;,:\n"
+
+    # Remove the characters
+    cleaned_string = string.translate(str.maketrans('', '', chars_to_remove))
+    return cleaned_string.rstrip().lstrip().lower()
+
 def fitness(decrypted_text):
     global FITNESS_STEPS
     FITNESS_STEPS += 1
@@ -136,7 +144,8 @@ def fitness(decrypted_text):
     two_letter_combinations = [a + b for a in letters for b in letters]
     letter2_counts = {combination: 0 for combination in two_letter_combinations}
     for word in decrypted_text:
-        new_word = word.replace(",", "").replace(".", "").replace("/", "").replace(":", "").replace(";","").rstrip().lstrip().lower()
+        #new_word = word.replace(",", "").replace(".", "").replace("/", "").replace(":", "").replace(";","").rstrip().lstrip().lower()
+        new_word = remove_chars(word)
         if new_word in DICT:
             hit_rate += 1
         for i in range(len(new_word)):
@@ -147,10 +156,10 @@ def fitness(decrypted_text):
             if new_word[i].isalpha() and new_word[i + 1].isalpha():
                 letter2_counts[new_word[i:i + 2]] += 1
     hit_rate = hit_rate/len(decrypted_text)
-    for item in letter_counts:
-        letter_freq += abs(letter_counts[item] * LETTER_FREQ[item.lower()])
-    for item in letter2_counts:
-        letter2_freq += abs(letter2_counts[item] * LETTER2_FREQ[item.lower()])
+    for letter in letter_counts:
+        letter_freq += letter_counts[letter] * LETTER_FREQ[letter]
+    for pair in letter2_counts:
+        letter2_freq += letter2_counts[pair] * LETTER2_FREQ[pair]
     return (hit_rate + letter_freq + letter2_freq), hit_rate
 
 
