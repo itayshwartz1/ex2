@@ -6,7 +6,7 @@ POPULATION_SIZE = 100
 TOURNAMENT_RATE = 0.2
 TOURNAMENT_SIZE = 10
 MUTATION_RATE = 0.2
-MAX_GEN = 200
+MAX_GEN = 500
 CROSSOVER_RATE = 0.4
 RESULTS_FOR_NEXT = 0.1
 HIT_RATE = 0
@@ -14,9 +14,13 @@ LAST_PAIR = 'ZZ'
 LETTERS = string.ascii_lowercase
 LETTER_APPEARANCE = {letter: 0 for letter in LETTERS}
 LETTER2_APPEARANCE = {combination: 0 for combination in [i + j for i in LETTERS for j in LETTERS]}
+LOCAL_MAX_RATE = int(0.05 * POPULATION_SIZE)
+ELITISM = 0.1
+MAX_POWER_MODE = 12
 
 global FITNESS_STEPS
 FITNESS_STEPS = 0
+
 
 def read_enc(filename):
     with open(filename, "r") as file:
@@ -126,12 +130,9 @@ def get_parents(population):
     return parent1[0], parent2[0]
 
 
-def remove_chars(string):
-    # Define the characters to remove
+def remove_chars(word):
     chars_to_remove = ".;,:\n"
-
-    # Remove the characters
-    cleaned_string = string.translate(str.maketrans('', '', chars_to_remove))
+    cleaned_string = word.translate(str.maketrans('', '', chars_to_remove))
     return cleaned_string.rstrip().lstrip().lower()
 
 def fitness(decrypted_text):
@@ -168,14 +169,13 @@ def genetic_algorithm(encrypted_text):
     hit_rate_counter = 0
     max_fitness = 0
     current_max_hit_rate = 0
-    local_max = 0
+    best_fitness_counter = 0
     prev_max_hit_rate = 0
-    f = set() # max localy
+    prev_best_fitness = 0
     population = create_population()
     best_mapping = []
     for gen in range(MAX_GEN):
         fitness_scores = []
-        new_population = []
         for child in population:
             decrypted_text = decrypt_text(encrypted_text, child)
             fitness_res, hit_rate = fitness(decrypted_text.split())
@@ -183,57 +183,58 @@ def genetic_algorithm(encrypted_text):
             if fitness_res > max_fitness:
                 max_fitness = fitness_res
                 current_max_hit_rate = hit_rate
+
+        # calculating the best fitness and table
+        current_best_fitness = max(fitness_scores)
+        best_mapping = population[fitness_scores.index(current_best_fitness)]
+
         if current_max_hit_rate == prev_max_hit_rate:
             hit_rate_counter += 1
         else:
             prev_max_hit_rate = current_max_hit_rate
             hit_rate_counter = 0
 
-        # calculating the best fitness and table
-        best_fitness = max(fitness_scores)
-        best_mapping = population[fitness_scores.index(best_fitness)]
+
         print("the best hitrate is ", current_max_hit_rate)
         # building the local maximum
-        if best_fitness in f:
-            local_max += 1
+        if current_best_fitness == prev_best_fitness:
+            best_fitness_counter += 1
         else:
-            if f != set():
-                f.pop()
-            f.add(best_fitness)
-            local_max = 0
+            prev_best_fitness = current_best_fitness
+            best_fitness_counter = 0
         # checking the local maximum. כמה דורות אני נמצא באותו ערך אז אני משנה את המוטציות
-        if local_max == int(0.05 * POPULATION_SIZE) or hit_rate_counter == int(0.05 * POPULATION_SIZE):
-            print("CHANGED THE MUTATION RATE TO 0.9")
+        if best_fitness_counter == LOCAL_MAX_RATE or hit_rate_counter == LOCAL_MAX_RATE:
             MUTATION_RATE = 1
             CROSSOVER_RATE = 1
-        res_fitness_dict = list(zip(population, fitness_scores))
-        res_fitness_dict = sorted(res_fitness_dict, key=lambda x: x[1], reverse=True)
-        for item in range(int(0.1 * POPULATION_SIZE)):
-            new_population.append(best_mapping)
+
+
+
+        population_with_fitness = sorted(list(zip(population, fitness_scores)), key=lambda x: x[1], reverse=True)
+        new_population = [best_mapping] * round(ELITISM * POPULATION_SIZE)
+
         while len(new_population) < POPULATION_SIZE:
-            parent1, parent2 = get_parents(res_fitness_dict)
+            parent1, parent2 = get_parents(population_with_fitness)
             child1, child2 = crossover(parent1, parent2)
-            child1 = mutate(child1)
-            child2 = mutate(child2)
-            new_population.append(child1)
-            new_population.append(child2)
+            new_population.append(mutate(child1))
+            new_population.append(mutate(child2))
+
         population = new_population[:POPULATION_SIZE]
-        if local_max % int(0.1 * POPULATION_SIZE) == 2:
-            print("CHANGED BACK THE MUTATION RATE TO 0.2")
+        if best_fitness_counter == MAX_POWER_MODE:
             CROSSOVER_RATE = 0.4
             MUTATION_RATE = 0.2
 
-    best_decrypted_text = decrypt_text(encrypted_text, best_mapping)
-    # Write the decrypted text to plain.txt
+        if best_fitness_counter == 15 or hit_rate_counter == 15 or current_max_hit_rate == 1:
+            break
+
+    best_text = decrypt_text(encrypted_text, best_mapping)
     with open("plain.txt", "w") as file:
-        file.write(best_decrypted_text.lower())
+        file.write(best_text)
 
-    # Write the substitution table to perm.txt
     with open("perm.txt", "w") as file:
-        for i, letter in enumerate(string.ascii_lowercase):
-            file.write(f"{letter} {best_mapping[i]}\n")
+        for i, letter in enumerate(LETTERS):
+            file.write(letter + " " + best_mapping[i] + "\n")
 
-    print(f"Number of steps: {FITNESS_STEPS}")
+    print("The number of calls to fitness function is: " + str(FITNESS_STEPS))
 
 
 genetic_algorithm(ENC_TXT)
